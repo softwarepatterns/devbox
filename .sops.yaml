@@ -1,13 +1,8 @@
-# SOPS age recipients for devbox secret encryption.
-#
-# Add age public keys for each environment that needs to decrypt secrets:
-# - Personal/workstation keys
-# - CI keys (via GitHub Actions secrets)
-#
-# Generate a new key pair: age-keygen -o key.txt
-# Add the public key (age1...) from key.txt below.
-
 creation_rules:
   - age:
-      # Software Patterns CI
-      # - age1... (add your public key here)
+      # Personal
+      - age1tdyvh0dru9vnyn8em0tp3mye9qma6xqfj4yp6ay65nwyvw94ndasftln49
+      # Production
+      - age15cwt6yx7pnaxtcffaudtplxzrxfwtz48ydpjst0pr9hwn7ml95rs4c9xxx
+      # Backup
+      - age18aghcthla9kuuqskewwyuk34j9xs346qx2vrwlng20k6dc0yt34szw7p2w

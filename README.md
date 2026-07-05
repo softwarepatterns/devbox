@@ -4,8 +4,6 @@ Turn any machine into a fully-equipped development and compute environment.
 Idempotent, OS-specific install scripts that provision toolchains, CLIs, and
 runtimes. Consumed by Docker images, Ansible playbooks, or run directly.
 
-**Today:** Debian and Ubuntu. **Tomorrow:** macOS, Windows, Arch, and more.
-
 ## Features
 
 *For the engineer deciding whether to adopt devbox.*
