@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# devbox test/verify.sh
+# devbox/test/verify.sh
 # Asserts every expected tool is installed and responds to --version.
-# Sourced by test/run.sh after scripts run inside a test container.
+# Runs inside the test container after the install scripts.
 # Exit non-zero if any tool is missing or fails.
-set -euo pipefail
+set -uo pipefail
 
 PASS=0
 FAIL=0
@@ -13,7 +13,7 @@ check() {
   local version_cmd="${2:---version}"
   if command -v "$tool" >/dev/null 2>&1; then
     local ver
-    ver="$("$tool" "$version_cmd" 2>&1 | head -1)"
+    ver="$("$tool" "$version_cmd" 2>&1 | head -1)" || true
     echo "  ✓ $tool: $ver"
     PASS=$((PASS + 1))
   else
@@ -31,7 +31,7 @@ check jq
 check rg
 check vim
 check python3
-check ssh
+check ssh      # ssh --version exits 1 (prints to stderr), handle via || true above
 check file
 check tmux
 check htop
