@@ -9,6 +9,12 @@
 
 FROM debian:bookworm-slim AS base
 
+LABEL org.opencontainers.image.title="devbox-remote"
+LABEL org.opencontainers.image.description="SSH-accessible compute target with sshd, key-only auth, volume support"
+LABEL org.opencontainers.image.source="https://github.com/softwarepatterns/devbox"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="Software Patterns LLC"
+
 # --- Install all devbox tooling -----------------------------------------------
 # Copy scripts and run them. Each script is idempotent and self-contained.
 COPY scripts/debian/ /tmp/devbox-scripts/

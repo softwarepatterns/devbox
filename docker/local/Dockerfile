@@ -7,6 +7,12 @@
 
 FROM debian:bookworm-slim AS base
 
+LABEL org.opencontainers.image.title="devbox-local"
+LABEL org.opencontainers.image.description="Local dev container with full toolchain — no sshd, direct access"
+LABEL org.opencontainers.image.source="https://github.com/softwarepatterns/devbox"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="Software Patterns LLC"
+
 # --- Install all devbox tooling -----------------------------------------------
 COPY scripts/debian/ /tmp/devbox-scripts/
 RUN bash /tmp/devbox-scripts/00-base.sh \
