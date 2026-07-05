@@ -10,6 +10,11 @@ tmux, htop, python3, ssh, build-essential.
 All tool caches are under `/data` for simple persistence. Clean lifecycle
 with tini as PID 1 — `docker stop` works instantly.
 
+The container runs as a non-root `devbox` user (uid 1000). On startup, the
+entrypoint detects the host user's uid from mounted volumes and remaps the
+`devbox` user to match — so files on bind-mounted directories are owned by
+the running user, with no ownership friction or `safe.directory` exceptions.
+
 ## Usage
 
 ### Run with a shell
@@ -18,7 +23,7 @@ with tini as PID 1 — `docker stop` works instantly.
 docker build -f docker/local/Dockerfile -t devbox-local .
 
 docker run -d --name devbox devbox-local
-docker exec -it devbox bash
+docker exec -it -u devbox devbox bash
 docker stop devbox
 ```
 
@@ -41,7 +46,7 @@ docker run -d --name devbox \
 
 ```bash
 docker run -d --name devbox -v $(pwd):/workspace devbox-local
-docker exec -w /workspace -it devbox bash
+docker exec -it -u devbox -w /workspace devbox bash
 ```
 
 ### Cache locations
@@ -72,7 +77,7 @@ Iterate:
 ```bash
 docker build -f docker/local/Dockerfile -t devbox-local . && \
 docker run -d --name devbox devbox-local && \
-docker exec -it devbox bash
+docker exec -it -u devbox devbox bash
 ```
 
 Test:
@@ -85,8 +90,8 @@ Test:
 
 The local container acts as you — it reuses your existing SSH identity, your
 age key, and your git identity. The simplest way to do this is to mount your
-entire `~/.ssh` directory read-only into the container. This gives the box
-your signing keypair, your `allowed_signers` file (so `git log` verifies
+entire `~/.ssh` directory read-only into `/home/devbox/.ssh`. This gives the
+box your signing keypair, your `allowed_signers` file (so `git log` verifies
 signatures locally without the confusing "allowedSignersFile needs to be
 configured" error), and any other SSH identity you have. Since the box is
 acting as you, that's appropriate.
@@ -96,10 +101,12 @@ box without an `allowed_signers` file, which the entrypoint then has to
 generate. Mounting the whole directory sidesteps that entirely: your existing,
 maintained `allowed_signers` is already correct.
 
+Mount targets use `/home/devbox/` (the devbox user's home), not `/root/`:
+
 ```bash
 docker run -d --name devbox \
-  -v ~/.ssh:/root/.ssh:ro \
-  -v ~/.config/sops/age:/root/.config/sops/age:ro \
+  -v ~/.ssh:/home/devbox/.ssh:ro \
+  -v ~/.config/sops/age:/home/devbox/.config/sops/age:ro \
   -e GIT_USER_NAME="Dane Stuckel" \
   -e GIT_USER_EMAIL="dane.stuckel@gmail.com" \
   devbox-local
