@@ -6,8 +6,8 @@ Docker images or run directly on bare metal, VMs, or CI.
 
 ## Features
 
-Pre-installed: git, bun, node, uv, python3, sops, age, gh, flyctl, ripgrep,
-jq, vim, tmux, htop, build-essential, ssh.
+Pre-installed: git, bun, node, npm, uv, python3, sops, age, gh, flyctl,
+ripgrep, jq, vim, tmux, htop, build-essential, ssh.
 
 **Scripts are the product.** The install scripts are standalone. They work
 on bare metal, in Docker, or in CI. Docker images are thin wrappers that
@@ -56,7 +56,7 @@ curl -fsSL "$base/40-cicd.sh" | sudo bash   # ...etc
 | Script          | Tools                                                      |
 |-----------------|------------------------------------------------------------|
 | `00-base.sh`    | git, curl, jq, ripgrep, vim, python3, build-essential, tmux, htop, ssh |
-| `10-ts.sh`      | bun, node (LTS)                                            |
+| `10-ts.sh`      | bun, node (LTS), npm                                       |
 | `20-python.sh`  | uv                                                         |
 | `30-secrets.sh` | sops, age                                                  |
 | `40-cicd.sh`    | gh (GitHub CLI), flyctl                                    |
@@ -85,8 +85,8 @@ pacman for Arch). Keep the numeric ordering. Add the OS to `test/run.sh`.
 devbox/
 ├── scripts/debian/   install scripts (the product)
 ├── docker/
-│   ├── local/        no sshd, direct access
-│   └── remote/       sshd on :2222, key auth
+│   ├── local/        no sshd, direct access — /home/devbox as HOME
+│   └── remote/       sshd on :2222, key auth — root
 ├── test/             run.sh + verify.sh
 ├── .sops.yaml        SOPS age recipients
 └── .env.enc          SOPS-encrypted secrets (committed)

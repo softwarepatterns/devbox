@@ -5,8 +5,8 @@ SSH in, work. For Fly.io machines, cloud VMs, or rented servers.
 
 ## Features
 
-Pre-installed: git, bun, node, uv, sops, age, gh, flyctl, ripgrep, jq, vim,
-tmux, htop, python3, ssh, build-essential.
+Pre-installed: git, bun, node, npm, uv, sops, age, gh, flyctl, ripgrep, jq,
+vim, tmux, htop, python3, ssh, build-essential.
 
 sshd on port 2222 with key-only auth. `authorized_keys` injected at runtime
 via the `SSH_AUTHORIZED_KEY` env var. Clean lifecycle with tini as PID 1.
@@ -66,11 +66,11 @@ Test:
 
 ## GitHub identity (optional)
 
-A remote box is a new named engineer — it gets its own keys, distinct from any
-human developer. Unlike the local variant (which reuses your whole `~/.ssh`),
-the remote box gets a narrow keypair injected via secrets. The asymmetry is
-deliberate: local acts as you and inherits your identity wholesale; remote is
-its own identity and should only have its own keys.
+A remote box is a new named engineer — it gets its own keys, distinct from
+any human developer. Unlike the local variant (which reuses your whole
+`~/.ssh`), the remote box gets a narrow keypair injected via secrets. The
+asymmetry is deliberate: local acts as you and inherits your identity
+wholesale; remote is its own identity and should only have its own keys.
 
 ### 1. Generate the keys
 
@@ -106,10 +106,11 @@ fly secrets set \
 ```
 
 One identity (`GIT_USER_NAME` + `GIT_USER_EMAIL`) sets both author and
-committer. Fly can only inject secrets as env vars, so the signing key content
-arrives via `GIT_SIGNING_KEY` — the entrypoint writes it to the standard path,
-derives the public key, and enables SSH signing with local verification.
+committer. Fly can only inject secrets as env vars, so the signing key
+content arrives via `GIT_SIGNING_KEY` — the entrypoint writes it to
+`/root/.ssh/id_ed25519`, derives the public key, and enables SSH signing
+with local verification.
 
-Then in any repo with a `.env.enc`: `./scripts/github-login.sh` authenticates
-`gh` using the decrypted, repo-scoped `GITHUB_TOKEN`. The same SSH key handles
-both `git push` (GitHub auth) and commit signing.
+Then in any repo with a `.env.enc`: `./scripts/github-login.sh`
+authenticates `gh` using the decrypted, repo-scoped `GITHUB_TOKEN`. The
+same SSH key handles both `git push` (GitHub auth) and commit signing.
