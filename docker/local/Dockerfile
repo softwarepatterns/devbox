@@ -13,6 +13,12 @@ LABEL org.opencontainers.image.source="https://github.com/softwarepatterns/devbo
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="Software Patterns LLC"
 
+# tini: proper PID 1 init process. Handles SIGTERM forwarding and zombie
+# reaping. Without it, tail/bash as PID 1 ignore docker stop on some kernels.
+RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
 # --- Install all devbox tooling -----------------------------------------------
 COPY scripts/debian/ /tmp/devbox-scripts/
 RUN bash /tmp/devbox-scripts/00-base.sh \
@@ -22,5 +28,7 @@ RUN bash /tmp/devbox-scripts/00-base.sh \
     && bash /tmp/devbox-scripts/40-cicd.sh \
     && rm -rf /tmp/devbox-scripts
 
-# Keep the container running with a sleep so it can be exec'd into.
-CMD ["sleep", "infinity"]
+# CMD process: tail -f /dev/null is more signal-responsive than sleep
+# infinity on some kernels (notably Colima's QEMU VM). The container stays
+# alive but cleanly stops on SIGTERM. Get a shell via: docker exec -it <name> bash
+CMD ["tail", "-f", "/dev/null"]

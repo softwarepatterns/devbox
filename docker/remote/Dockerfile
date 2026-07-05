@@ -15,6 +15,11 @@ LABEL org.opencontainers.image.source="https://github.com/softwarepatterns/devbo
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="Software Patterns LLC"
 
+# tini: proper PID 1 init process. Handles SIGTERM forwarding and zombie
+# reaping. The remote variant's sshd is a proper daemon, but tini ensures
+# clean shutdown and zombie reaping for spawned SSH sessions.
+RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lists/*
+
 # --- Install all devbox tooling -----------------------------------------------
 # Copy scripts and run them. Each script is idempotent and self-contained.
 COPY scripts/debian/ /tmp/devbox-scripts/
@@ -43,5 +48,5 @@ RUN chmod 755 /usr/local/bin/devbox-entrypoint.sh
 # /data corrupts the rootfs overlay, causing every binary to return ENOENT.
 # The entrypoint creates /data subdirectories at runtime after the volume mount.
 
-ENTRYPOINT ["/usr/bin/bash", "/usr/local/bin/devbox-entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/devbox-entrypoint.sh"]
 CMD ["/usr/sbin/sshd", "-D", "-e"]
