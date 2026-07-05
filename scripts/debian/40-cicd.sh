@@ -35,8 +35,11 @@ if command -v flyctl >/dev/null 2>&1; then
   log "flyctl already installed: $(flyctl version 2>&1 | head -1)"
 else
   log "Installing flyctl (Fly.io CLI)..."
-  curl -LfsSL https://fly.io/install.sh | sh
-  # flyctl installs to /root/.fly/bin. Make it available system-wide.
-  ln -sf /root/.fly/bin/flyctl /usr/local/bin/flyctl 2>/dev/null || true
+  # The fly.io installer writes to $HOME/.fly/bin. During Docker builds HOME is
+  # /root, so the binary lands in /root/.fly/bin — unreachable at runtime when
+  # the container runs as a non-root uid. Install directly to /usr/local/bin
+  # so flyctl is on PATH for every user.
+  curl -LfsSL https://fly.io/install.sh | FLYCTL_INSTALL=/usr/local sh
+  ln -sf /usr/local/bin/flyctl /usr/local/bin/fly 2>/dev/null || true
   log "flyctl installed: $(flyctl version 2>&1 | head -1)"
 fi

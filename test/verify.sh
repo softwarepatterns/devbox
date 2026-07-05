@@ -38,6 +38,8 @@ check htop
 
 # TS toolchain
 check bun
+check node
+check npm
 
 # Python toolchain
 check uv

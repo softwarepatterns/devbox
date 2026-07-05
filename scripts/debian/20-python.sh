@@ -17,8 +17,9 @@ if command -v uv >/dev/null 2>&1; then
   log "uv already installed: $(uv --version)"
 else
   log "Installing uv..."
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  # uv installs to ~/.local/bin. Ensure it's on PATH for non-interactive shells.
-  ln -sf /root/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true
+  # The uv installer writes to $HOME/.local/bin. During Docker builds HOME is
+  # /root, so the binary lands in /root/.local/bin — unreachable at runtime when
+  # the container runs as a non-root uid. Install directly to /usr/local/bin.
+  curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
   log "uv installed: $(uv --version)"
 fi
