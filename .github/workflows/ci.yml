@@ -31,5 +31,16 @@ jobs:
           - ubuntu:24.04
     steps:
       - uses: actions/checkout@v4
+
+      # Decrypt secrets if SOPS_AGE_KEY is configured (optional — tests run
+      # without secrets too). The decrypted .env is available to scripts.
+      - name: Decrypt secrets
+        if: ${{ vars.SOPS_AGE_KEY != '' }}
+        run: |
+          curl -fsSL -o /usr/local/bin/sops \
+            https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64
+          chmod +x /usr/local/bin/sops
+          sops -d .env.enc > .env || true
+
       - name: Run test suite
         run: ./test/run.sh "${{ matrix.target }}"

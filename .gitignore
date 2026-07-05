@@ -2,10 +2,14 @@
 *.pyc
 __pycache__/
 
-# Local environment files
+# Secrets — only encrypted versions are committed
 .env
 .env.*
-*.local
+!.env.enc
+
+# Local age keys
+key.txt
+*.agekey
 
 # Editor files
 *.swp
