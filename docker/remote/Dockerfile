@@ -1,11 +1,7 @@
 # devbox remote — SSH-accessible compute target.
 #
-# Used by: Fly.io machines, cloud VMs, any scenario where an external client
-# (agent framework, human, CI runner) connects over SSH.
-#
-# Security posture: sshd with key-only auth on port 2222 (Fly's hallpass
-# occupies :22). authorized_keys injected at runtime via CONTROL_PLANE_PUBKEY
-# env var (set as a Fly secret or Docker env). No password auth.
+# sshd with key-only auth on port 2222. authorized_keys injected at runtime
+# via CONTROL_PLANE_PUBKEY env var.
 
 FROM debian:bookworm-slim AS base
 
@@ -15,13 +11,23 @@ LABEL org.opencontainers.image.source="https://github.com/softwarepatterns/devbo
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="Software Patterns LLC"
 
-# tini: proper PID 1 init process. Handles SIGTERM forwarding and zombie
-# reaping. The remote variant's sshd is a proper daemon, but tini ensures
-# clean shutdown and zombie reaping for spawned SSH sessions.
+# tini: proper PID 1 for signal forwarding and zombie reaping.
 RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lists/*
 
+# --- Cache configuration ------------------------------------------------------
+# Same ENV vars as the local variant. The remote variant mounts a Fly volume
+# at /data, so caches persist across machine restarts automatically.
+ENV BUN_INSTALL_CACHE_DIR=/data/bun
+ENV UV_CACHE_DIR=/data/uv
+ENV npm_config_cache=/data/npm
+ENV PIP_CACHE_DIR=/data/pip
+
+# Do NOT create /data here. Fly mounts a volume at /data at runtime; any
+# Dockerfile layer that touches /data corrupts the rootfs overlay (verified
+# the hard way — every binary returns ENOENT). The entrypoint creates
+# subdirectories at runtime after the volume mounts.
+
 # --- Install all devbox tooling -----------------------------------------------
-# Copy scripts and run them. Each script is idempotent and self-contained.
 COPY scripts/debian/ /tmp/devbox-scripts/
 RUN bash /tmp/devbox-scripts/00-base.sh \
     && bash /tmp/devbox-scripts/10-ts.sh \
@@ -31,8 +37,7 @@ RUN bash /tmp/devbox-scripts/00-base.sh \
     && rm -rf /tmp/devbox-scripts
 
 # --- sshd configuration -------------------------------------------------------
-# Port 2222: Fly's built-in SSH proxy (hallpass) occupies :22. The service
-# config in fly.toml maps external :22 → internal :2222.
+# Port 2222: Fly's built-in SSH proxy (hallpass) occupies :22.
 RUN mkdir -p /run/sshd \
     && sed -i 's/^#\?Port .*/Port 2222/' /etc/ssh/sshd_config \
     && sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config \
@@ -42,11 +47,6 @@ RUN mkdir -p /run/sshd \
 # --- Entrypoint ---------------------------------------------------------------
 COPY docker/remote/entrypoint.sh /usr/local/bin/devbox-entrypoint.sh
 RUN chmod 755 /usr/local/bin/devbox-entrypoint.sh
-
-# IMPORTANT: Do NOT create /data or WORKDIR /data in this Dockerfile.
-# Fly mounts a volume at /data at runtime. Any Dockerfile layer that touches
-# /data corrupts the rootfs overlay, causing every binary to return ENOENT.
-# The entrypoint creates /data subdirectories at runtime after the volume mount.
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/devbox-entrypoint.sh"]
 CMD ["/usr/sbin/sshd", "-D", "-e"]

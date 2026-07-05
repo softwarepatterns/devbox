@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# devbox remote entrypoint: prepare /data, generate host keys, inject SSH key, run sshd.
+# devbox remote entrypoint: prepare /data caches, generate host keys,
+# inject SSH key, then exec the CMD (sshd).
 set -euo pipefail
 
-# /data subdirectories. Created at runtime because Fly mounts the volume over
-# /data, hiding anything created during build.
+# Cache and workspace directories. Created at runtime because volumes mount
+# AFTER the image layers but BEFORE this entrypoint runs. See docker/entrypoint.sh
+# for the shared version. This is the remote variant — same dirs plus host key setup.
 mkdir -p \
-  /data/workspace \
+  /data/bun \
   /data/uv \
   /data/npm \
-  /data/bun \
-  /data/cache
+  /data/pip \
+  /data/workspace
 
-# Generate host keys if they don't exist.
+# Generate SSH host keys if they don't exist.
 ssh-keygen -A >/dev/null 2>&1
 
 # Authorize the control plane's key so external clients can SSH in.
