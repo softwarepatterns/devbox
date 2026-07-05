@@ -1,0 +1,14 @@
+# OS-specific build artifacts
+*.pyc
+__pycache__/
+
+# Local environment files
+.env
+.env.*
+*.local
+
+# Editor files
+*.swp
+*.swo
+*~
+.DS_Store

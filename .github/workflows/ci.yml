@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # --- Static analysis: lint every shell script -------------------------------
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: warning
+
+  # --- Contract tests: build per-OS images and verify tools -------------------
+  test:
+    name: Test (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - debian:bookworm-slim
+          - debian:trixie-slim
+          - ubuntu:24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run test suite
+        run: ./test/run.sh "${{ matrix.target }}"
