@@ -1,7 +1,7 @@
 # devbox remote — SSH-accessible compute target.
 #
 # sshd with key-only auth on port 2222. authorized_keys injected at runtime
-# via CONTROL_PLANE_PUBKEY env var.
+# via SSH_AUTHORIZED_KEY env var.
 
 FROM debian:bookworm-slim AS base
 

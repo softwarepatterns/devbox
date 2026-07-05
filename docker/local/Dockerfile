@@ -25,7 +25,7 @@ ENV PIP_CACHE_DIR=/data/pip
 
 # Create the default structure. Named volumes seed from this layer on first
 # mount. The entrypoint recreates dirs if a bind mount hides them.
-RUN mkdir -p /data/bun /data/uv /data/npm /data/pip /data/workspace
+RUN mkdir -p /data/bun /data/uv /data/npm /data/pip
 
 # --- Install all devbox tooling -----------------------------------------------
 COPY scripts/debian/ /tmp/devbox-scripts/
