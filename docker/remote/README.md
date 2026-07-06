@@ -34,14 +34,25 @@ docker run -d --name devbox-remote \
 ssh -p 2222 root@localhost
 ```
 
-### Run on Fly.io
+### Deploy on Fly.io
+
+A reference `fly.toml` is included at `docker/remote/fly.toml`. Copy it to
+your project, rename the app, and deploy:
 
 ```bash
-fly deploy          # uses fly.toml in your project
-fly ssh console     # SSH in via Fly's proxy
+flyctl launch --no deploy   # creates the app + volume
+flyctl deploy . --dockerfile docker/remote/Dockerfile
+fly ssh console             # SSH in via Fly's proxy
 ```
 
-On Fly, `/data` is a mounted volume — caches persist across restarts.
+Required secrets:
+
+```bash
+fly secrets set SSH_AUTHORIZED_KEY="$(cat ~/.ssh/id_ed25519.pub)"
+```
+
+On Fly, `/data` is a mounted volume — caches persist across restarts. The
+entrypoint creates `/data/{bun,uv,npm,pip}` at runtime after the volume mounts.
 
 ### Cache locations
 
