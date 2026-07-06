@@ -27,6 +27,7 @@ RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lis
 # add a passwd entry for the running uid (ssh-keygen requires it for signing).
 # Must come AFTER all apt installs (they reset these files to 644).
 RUN mkdir -p /home/devbox && chmod 1777 /home/devbox
+RUN mkdir -p /data && chmod 1777 /data
 ENV HOME=/home/devbox
 ENV TMPDIR=/tmp
 

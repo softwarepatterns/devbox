@@ -1,8 +1,8 @@
 # devbox
 
-Turn any machine into a fully-equipped development environment. Idempotent,
-OS-specific install scripts that provision a full toolchain — consumed by
-Docker images or run directly on bare metal, VMs, or CI.
+Turn any machine into a fully-equipped development environment for agents.
+Idempotent, OS-specific install scripts that provision a full toolchain —
+consumed by Docker images or run directly on bare metal, VMs, or CI.
 
 ## Features
 
@@ -30,13 +30,13 @@ mirror of the host.
 
 ### Docker
 
-One image, two modes — local (docker exec) and remote (sshd). See
+One image, started via `docker exec` (local) or `sshd` (remote). See
 [docker/README.md](docker/README.md) for the full guide.
 
 ```bash
 docker build -f docker/Dockerfile -t devbox .
 
-# local
+# local (docker exec)
 docker run -d --name devbox --user "$(id -u):$(id -g)" -v devbox-data:/data devbox
 
 # remote (sshd)

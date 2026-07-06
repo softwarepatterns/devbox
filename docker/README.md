@@ -1,6 +1,6 @@
 # devbox (Docker)
 
-A sealed compute container with a full development toolchain.
+A sealed compute container with a full development toolchain, for agents.
 
 ## Design
 
@@ -18,12 +18,15 @@ The container generates its own SSH identity on first boot. Register the
 public key with GitHub (Settings → SSH and GPG keys → Signing keys) to
 enable signed commits. The key persists with the named volume.
 
-## Two modes
+## Usage
 
-One image, two ways to run:
+One image. Start it with `docker exec` access (local) or `sshd` access
+(remote via `DEVBOX_SSH=true`):
 
-**Local mode** (default) — idle shell, accessed via `docker exec`:
+**docker exec (local):**
 ```bash
+docker build -f docker/Dockerfile -t devbox .
+
 docker run -d --name devbox \
   --user "$(id -u):$(id -g)" \
   -v devbox-data:/data \
@@ -32,7 +35,7 @@ docker run -d --name devbox \
 docker exec -it devbox bash
 ```
 
-**Remote mode** — sshd on :2222, accessed via SSH:
+**sshd (remote):**
 ```bash
 docker run -d --name devbox \
   -e DEVBOX_SSH=true \
@@ -42,14 +45,6 @@ docker run -d --name devbox \
 
 ssh -p 2222 root@localhost
 ```
-
-## Build
-
-```bash
-docker build -f docker/Dockerfile -t devbox .
-```
-
-Requires Docker (Docker Desktop, Colima, OrbStack, or dockerd).
 
 ## Deploy on Fly.io
 
