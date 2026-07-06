@@ -6,6 +6,7 @@
 #   id_ed25519 + .pub       the box's own signing keypair (generated on init)
 #   allowed_signers         for local git signature verification
 #   authorized_keys         who can SSH in (from SSH_AUTHORIZED_KEY, persisted)
+#   known_hosts             github.com host keys (so git clone works)
 #   ssh_host_*_key + .pub   sshd host keys (so clients don't get warnings)
 #
 # Init is per-file: each file is its own init signal. Delete one, only that
@@ -28,6 +29,13 @@ elif [ -d "$HOME/.ssh" ] && [ -z "$(ls -A "$HOME/.ssh" 2>/dev/null)" ]; then
 fi
 if [ ! -e "$HOME/.ssh" ]; then
   ln -s "$SSH_DIR" "$HOME/.ssh"
+fi
+
+# --- known_hosts (generated if absent) -----------------------------------------
+# github.com host keys so git clone over SSH works without manual intervention.
+KNOWN="$SSH_DIR/known_hosts"
+if [ ! -f "$KNOWN" ]; then
+  ssh-keyscan -t ed25519 github.com >> "$KNOWN" 2>/dev/null || true
 fi
 
 # --- signing keypair (generated if absent) ------------------------------------
@@ -89,8 +97,8 @@ if [ "${DEVBOX_SSH:-}" = "true" ]; then
   fi
 
   # Tell sshd to use /data/.ssh for host keys and authorized_keys.
-  sed -i "s|^#\?HostKey /etc/ssh/ssh_host_|HostKey /data/.ssh/ssh_host_|" /etc/ssh/sshd_config
-  sed -i "s|^#\?AuthorizedKeysFile.*|AuthorizedKeysFile /data/.ssh/authorized_keys|" /etc/ssh/sshd_config
+  sed -i 's|^#\?HostKey /etc/ssh/ssh_host_|HostKey /data/.ssh/ssh_host_|' /etc/ssh/sshd_config
+  sed -i 's|^#\?AuthorizedKeysFile.*|AuthorizedKeysFile /data/.ssh/authorized_keys|' /etc/ssh/sshd_config
 
   /usr/sbin/sshd
   log "sshd listening on :2222"
