@@ -84,8 +84,14 @@ fi
 # In remote mode: persist host keys and authorized_keys to /data/.ssh so they
 # survive restarts. ssh-keygen -A is idempotent — only generates what's missing.
 if [ "${DEVBOX_SSH:-}" = "true" ]; then
-  # Host keys: generate to /data/.ssh so they persist. Point sshd at them.
-  ssh-keygen -A -f /data >/dev/null 2>&1 || ssh-keygen -A >/dev/null 2>&1
+  # Host keys: generate directly into /data/.ssh if absent (persists across restarts).
+  # Can't use 'ssh-keygen -A -f /data' because that writes to /data/etc/ssh/,
+  # not /data/.ssh/. Generate each key type explicitly.
+  for keytype in rsa ecdsa ed25519; do
+    if [ ! -f "$SSH_DIR/ssh_host_${keytype}_key" ]; then
+      ssh-keygen -t "$keytype" -N "" -f "$SSH_DIR/ssh_host_${keytype}_key" >/dev/null 2>&1 || true
+    fi
+  done
 
   # Authorized keys: persist from env if the file doesn't exist yet.
   AUTH="$SSH_DIR/authorized_keys"
