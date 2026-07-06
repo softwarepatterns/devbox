@@ -27,6 +27,7 @@ RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lis
 # This is the same pattern VS Code Dev Containers and GitHub Codespaces use.
 RUN mkdir -p /home/devbox && chmod 1777 /home/devbox
 ENV HOME=/home/devbox
+ENV TMPDIR=/tmp
 
 # --- Cache configuration ------------------------------------------------------
 # All tool caches live under /data so they persist with a single named volume:
@@ -38,9 +39,12 @@ ENV UV_CACHE_DIR=/data/uv
 ENV npm_config_cache=/data/npm
 ENV PIP_CACHE_DIR=/data/pip
 
-# Create the default structure. Named volumes seed from this layer on first
-# mount. The entrypoint recreates dirs if a bind mount hides them.
-RUN mkdir -p /data/bun /data/uv /data/npm /data/pip
+# Create the default cache structure. World-writable (sticky bit) because the
+# runtime uid is dynamic (set by docker_run_as_host_user). Named volumes seed
+# from this layer; the entrypoint recreates + re-chmods at runtime.
+
+RUN mkdir -p /data/bun /data/uv /data/npm /data/pip \
+    && chmod 1777 /data/bun /data/uv /data/npm /data/pip
 
 # --- Install all devbox tooling -----------------------------------------------
 # Scripts run as root at build time. Tools install to system paths

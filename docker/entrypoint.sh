@@ -18,12 +18,14 @@ if ! getent passwd "$(id -u)" >/dev/null 2>&1; then
   echo "devbox:x:$(id -g):" >> /etc/group
 fi
 
-# All persistent cache directories live under /data.
-mkdir -p \
-  /data/bun \
-  /data/uv \
-  /data/npm \
-  /data/pip
+# --- cache directories ---------------------------------------------------------
+# Created by the Dockerfile with chmod 1777. Recreated here in case a named
+# volume mount hides the image-created dirs (the entrypoint runs after mounts).
+# World-writable (sticky bit) so any uid can write — the runtime uid is dynamic.
+for d in /data/bun /data/uv /data/npm /data/pip; do
+  mkdir -p "$d"
+  chmod 1777 "$d" 2>/dev/null || true
+done
 
 # Ensure HOME .ssh exists for the allowed_signers file if we need to generate it.
 mkdir -p "$HOME/.ssh"
