@@ -1,7 +1,7 @@
-# devbox — sealed compute container with full development toolchain.
+# devbox — sealed compute container with full development toolchain, for agents.
 #
 # The container owns its state under /data (named volume): SSH identity, repos,
-# and tool caches. Host mounts are allowed but unsupported.
+# and tool caches. Host mounts (/workspace) are allowed but unsupported.
 #
 # Runs two ways:
 #   docker run devbox                           # local: shell via docker exec
@@ -12,7 +12,7 @@
 FROM debian:bookworm-slim AS base
 
 LABEL org.opencontainers.image.title="devbox"
-LABEL org.opencontainers.image.description="Sealed compute container with full toolchain"
+LABEL org.opencontainers.image.description="Sealed compute container with full toolchain, for agents"
 LABEL org.opencontainers.image.source="https://github.com/softwarepatterns/devbox"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="Software Patterns LLC"
@@ -20,21 +20,10 @@ LABEL org.opencontainers.image.vendor="Software Patterns LLC"
 # tini: proper PID 1 for signal forwarding and zombie reaping.
 RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lists/*
 
-# --- Home + passwd for dynamic uid --------------------------------------------
-# The container may run as a non-root uid (e.g. docker_run_as_host_user: true
-# maps the host uid). HOME is /home/devbox (world-writable, like /tmp).
-# /etc/passwd and /etc/group are world-writable so the non-root entrypoint can
-# add a passwd entry for the running uid (ssh-keygen requires it for signing).
-# Must come AFTER all apt installs (they reset these files to 644).
-RUN mkdir -p /home/devbox && chmod 1777 /home/devbox
-RUN mkdir -p /data && chmod 1777 /data
-ENV HOME=/home/devbox
-ENV TMPDIR=/tmp
-
 # --- /data cache configuration ------------------------------------------------
 # /data is the container's sealed territory (named volume). The entrypoint
 # creates the full structure at runtime after the volume mounts:
-#   /data/.ssh     generated SSH keypair + allowed_signers (sealed identity)
+#   /data/.ssh     SSH identity (signing key, host keys, authorized_keys)
 #   /data/repos    container-native repository clones
 #   /data/bun      BUN_INSTALL_CACHE_DIR
 #   /data/uv       UV_CACHE_DIR
@@ -67,10 +56,9 @@ RUN apt-get update -qq && apt-get install -y -qq openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Entrypoint ---------------------------------------------------------------
-RUN chmod 666 /etc/passwd /etc/group
 COPY docker/entrypoint.sh /usr/local/bin/devbox-entrypoint.sh
 RUN chmod 755 /usr/local/bin/devbox-entrypoint.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/devbox-entrypoint.sh"]
-# Default CMD: idle shell. Override with DEVBOX_SSH=true for remote sshd mode.
+# Default CMD: idle shell. DEVBOX_SSH=true starts sshd (remote mode).
 CMD ["tail", "-f", "/dev/null"]

@@ -4,9 +4,9 @@ A sealed compute container with a full development toolchain, for agents.
 
 ## Design
 
-The container owns its state under `/data` (named volume):
-- `/data/.ssh` — the box's own SSH keypair and allowed_signers (generated on
-  first boot, persists across restarts)
+The container runs as root and owns its state under `/data` (named volume):
+- `/data/.ssh` — the box's own SSH identity (signing keypair, host keys,
+  authorized_keys). All generated on first boot, persisted across restarts.
 - `/data/repos` — container-native repository clones
 - `/data/{bun,uv,npm,pip}` — tool caches
 
@@ -28,8 +28,9 @@ One image. Start it with `docker exec` access (local) or `sshd` access
 docker build -f docker/Dockerfile -t devbox .
 
 docker run -d --name devbox \
-  --user "$(id -u):$(id -g)" \
   -v devbox-data:/data \
+  -e GIT_USER_NAME="Dane Stuckel" \
+  -e GIT_USER_EMAIL="dane.stuckel@gmail.com" \
   devbox
 
 docker exec -it devbox bash
@@ -48,17 +49,13 @@ ssh -p 2222 root@localhost
 
 ## Deploy on Fly.io
 
-A reference `fly.toml` is included at `docker/fly.toml`. Copy it, rename the
-app, and deploy with `DEVBOX_SSH=true`:
+A reference `fly.toml` is at `docker/fly.toml`. Copy it, rename the app:
 
 ```bash
 flyctl deploy . --dockerfile docker/Dockerfile
 fly secrets set DEVBOX_SSH=true SSH_AUTHORIZED_KEY="$(cat ~/.ssh/id_ed25519.pub)"
 fly ssh console
 ```
-
-On Fly, `/data` is a mounted volume — caches and identity persist across
-restarts.
 
 ## Cache locations
 
@@ -85,7 +82,8 @@ git clone git@github.com:yourorg/yourrepo.git
 The container's SSH keypair is generated on first boot and stored under
 `/data/.ssh`. To enable signed commits:
 
-1. Check the first-boot logs for the public key (or `cat /data/.ssh/id_ed25519.pub`)
+1. Check the first-boot logs for the public key
+   (or `cat /data/.ssh/id_ed25519.pub`)
 2. Add it to GitHub under Settings → SSH and GPG keys → Signing keys
 3. Commits are automatically signed via SSH (`commit.gpgsign=true`)
 
@@ -93,16 +91,12 @@ Alternatively, provide a pre-generated key via `GIT_SIGNING_KEY`:
 
 ```bash
 docker run -d --name devbox \
-  --user "$(id -u):$(id -g)" \
   -v devbox-data:/data \
   -e GIT_USER_NAME="Dane Stuckel" \
   -e GIT_USER_EMAIL="dane.stuckel@gmail.com" \
   -e GIT_SIGNING_KEY="$(cat ~/.ssh/devbox-signing-key)" \
   devbox
 ```
-
-In any repo with a `.env.enc`, `./scripts/github-login.sh` authenticates `gh`
-using the decrypted, repo-scoped `GITHUB_TOKEN`.
 
 ## Development
 

@@ -37,7 +37,7 @@ One image, started via `docker exec` (local) or `sshd` (remote). See
 docker build -f docker/Dockerfile -t devbox .
 
 # local (docker exec)
-docker run -d --name devbox --user "$(id -u):$(id -g)" -v devbox-data:/data devbox
+docker run -d --name devbox -v devbox-data:/data devbox
 
 # remote (sshd)
 docker run -d --name devbox -e DEVBOX_SSH=true -v devbox-data:/data devbox

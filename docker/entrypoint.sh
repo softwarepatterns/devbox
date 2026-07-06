@@ -1,69 +1,58 @@
 #!/usr/bin/env bash
-# devbox entrypoint: init sealed /data (first boot), configure git identity and
-# signing, optionally start sshd, then exec the CMD.
+# devbox entrypoint: init /data identity, configure git signing, optionally
+# start sshd, then exec the CMD.
 #
-# Two modes:
-#   DEVBOX_SSH unset  → local mode: tail -f /dev/null (access via docker exec)
-#   DEVBOX_SSH=true   → remote mode: sshd on :2222 (access via SSH)
+# All SSH state lives under /data/.ssh and persists across restarts:
+#   id_ed25519 + .pub       the box's own signing keypair (generated on init)
+#   allowed_signers         for local git signature verification
+#   authorized_keys         who can SSH in (from SSH_AUTHORIZED_KEY, persisted)
+#   ssh_host_*_key + .pub   sshd host keys (so clients don't get warnings)
 #
-# In both modes the sealed /data model is identical: the container owns its
-# SSH identity, repos, and caches under /data (named volume).
+# Init is per-file: each file is its own init signal. Delete one, only that
+# one regenerates on next boot. No marker file — presence of the target data
+# IS the detection.
 set -euo pipefail
 
 log() { echo "[devbox] $*"; }
 
-# --- passwd entry --------------------------------------------------------------
-# The running uid may not have a passwd entry (docker_run_as_host_user sets
-# the uid but not the identity). ssh-keygen requires a valid entry for signing.
-if ! getent passwd "$(id -u)" >/dev/null 2>&1; then
-  echo "devbox:x:$(id -u):$(id -g)::${HOME}:/bin/bash" >> /etc/passwd
-  echo "devbox:x:$(id -g):" >> /etc/group
-fi
+SSH_DIR="/data/.ssh"
 
 # --- /data structure -----------------------------------------------------------
-# The container's sealed territory. All dirs created here (not in the Dockerfile)
-# because named volumes mount over /data at runtime, hiding image-created dirs.
-mkdir -p /data/.ssh /data/repos /data/bun /data/uv /data/npm /data/pip
+mkdir -p "$SSH_DIR" /data/repos /data/bun /data/uv /data/npm /data/pip
 
 # Symlink ~/.ssh → /data/.ssh so all tools find keys at the standard path.
-# Never overwrites a dir that has content (could be a user-provided /data/.ssh).
 if [ -L "$HOME/.ssh" ]; then
   rm -f "$HOME/.ssh"
 elif [ -d "$HOME/.ssh" ] && [ -z "$(ls -A "$HOME/.ssh" 2>/dev/null)" ]; then
   rmdir "$HOME/.ssh" 2>/dev/null || true
 fi
 if [ ! -e "$HOME/.ssh" ]; then
-  ln -s /data/.ssh "$HOME/.ssh"
+  ln -s "$SSH_DIR" "$HOME/.ssh"
 fi
 
-# --- init phase: generate SSH identity (first boot only) ----------------------
-# The box gets its own keypair. Register the public key with GitHub (Settings →
-# SSH and GPG keys → Signing keys). Subsequent boots reuse the persisted key.
-MARKER="/data/.devbox-initialized"
-SSH_KEY="/data/.ssh/id_ed25519"
+# --- signing keypair (generated if absent) ------------------------------------
+SSH_KEY="$SSH_DIR/id_ed25519"
 
-if [ ! -f "$MARKER" ]; then
-  log "First boot: generating SSH keypair"
-
+if [ ! -f "$SSH_KEY" ]; then
   if [ -n "${GIT_SIGNING_KEY:-}" ]; then
-    log "Materializing key from GIT_SIGNING_KEY"
+    log "Materializing signing key from GIT_SIGNING_KEY"
     printf '%s\n' "$GIT_SIGNING_KEY" > "$SSH_KEY"
     chmod 600 "$SSH_KEY"
     ssh-keygen -y -f "$SSH_KEY" > "${SSH_KEY}.pub"
   else
-    comment="${GIT_USER_EMAIL:-devbox@local}"
+    comment="${GIT_USER_EMAIL:-devbox}"
+    log "Generating signing keypair"
     ssh-keygen -t ed25519 -N "" -f "$SSH_KEY" -C "$comment" >/dev/null
-    log "Generated new keypair. Register this public key with GitHub:"
+    log "Register this public key with GitHub (Settings → SSH and GPG keys → Signing keys):"
     cat "${SSH_KEY}.pub"
   fi
+fi
 
-  # Generate allowed_signers for local signature verification.
-  if [ -n "${GIT_USER_EMAIL:-}" ]; then
-    printf '%s %s\n' "$GIT_USER_EMAIL" "$(cat "${SSH_KEY}.pub")" > /data/.ssh/allowed_signers
-  fi
-
-  touch "$MARKER"
-  log "Volume initialized"
+# --- allowed_signers (generated if absent) ------------------------------------
+# For local git signature verification. Uses the signing pubkey + GIT_USER_EMAIL.
+ALLOWED="$SSH_DIR/allowed_signers"
+if [ ! -f "$ALLOWED" ] && [ -f "${SSH_KEY}.pub" ] && [ -n "${GIT_USER_EMAIL:-}" ]; then
+  printf '%s %s\n' "$GIT_USER_EMAIL" "$(cat "${SSH_KEY}.pub")" > "$ALLOWED"
 fi
 
 # --- git identity and signing -------------------------------------------------
@@ -73,37 +62,36 @@ if [ -n "${GIT_USER_NAME:-}" ] && [ -n "${GIT_USER_EMAIL:-}" ]; then
 fi
 
 PUBKEY="${SSH_KEY}.pub"
-ALLOWED="/data/.ssh/allowed_signers"
 if [ -f "$PUBKEY" ]; then
   git config --global gpg.format ssh
   git config --global user.signingkey "$PUBKEY"
   git config --global commit.gpgsign true
   git config --global tag.gpgsign true
-
   if [ -f "$ALLOWED" ]; then
     git config --global gpg.ssh.allowedsignersfile "$ALLOWED"
   fi
 fi
 
 # --- sshd (remote mode) --------------------------------------------------------
-# In remote mode, authorize the caller's key and start sshd alongside the CMD.
-# The authorized key is for SSH ACCESS to the box; the signing key is separate
-# (generated above for git commit signing).
+# In remote mode: persist host keys and authorized_keys to /data/.ssh so they
+# survive restarts. ssh-keygen -A is idempotent — only generates what's missing.
 if [ "${DEVBOX_SSH:-}" = "true" ]; then
-  # Generate host keys if they don't exist.
-  ssh-keygen -A >/dev/null 2>&1
+  # Host keys: generate to /data/.ssh so they persist. Point sshd at them.
+  ssh-keygen -A -f /data >/dev/null 2>&1 || ssh-keygen -A >/dev/null 2>&1
 
-  # Authorize the caller's public key.
-  if [ -n "${SSH_AUTHORIZED_KEY:-}" ]; then
-    mkdir -p /root/.ssh
-    printf '%s\n' "${SSH_AUTHORIZED_KEY}" > /root/.ssh/authorized_keys
-    chmod 700 /root/.ssh
-    chmod 600 /root/.ssh/authorized_keys
-  else
-    log "WARNING: DEVBOX_SSH=true but SSH_AUTHORIZED_KEY not set; no SSH access" >&2
+  # Authorized keys: persist from env if the file doesn't exist yet.
+  AUTH="$SSH_DIR/authorized_keys"
+  if [ ! -f "$AUTH" ] && [ -n "${SSH_AUTHORIZED_KEY:-}" ]; then
+    printf '%s\n' "${SSH_AUTHORIZED_KEY}" > "$AUTH"
+  fi
+  if [ ! -f "$AUTH" ]; then
+    log "WARNING: DEVBOX_SSH=true but no authorized_keys; no SSH access" >&2
   fi
 
-  # Start sshd in the background, then exec the original CMD.
+  # Tell sshd to use /data/.ssh for host keys and authorized_keys.
+  sed -i "s|^#\?HostKey /etc/ssh/ssh_host_|HostKey /data/.ssh/ssh_host_|" /etc/ssh/sshd_config
+  sed -i "s|^#\?AuthorizedKeysFile.*|AuthorizedKeysFile /data/.ssh/authorized_keys|" /etc/ssh/sshd_config
+
   /usr/sbin/sshd
   log "sshd listening on :2222"
 fi
