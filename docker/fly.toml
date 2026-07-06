@@ -1,17 +1,17 @@
-# devbox-remote — reference Fly.io deployment template.
+# devbox — reference Fly.io deployment template.
 #
 # Copy this file, rename the app, and deploy:
-#   flyctl deploy . --app <your-app> --dockerfile docker/remote/Dockerfile
+#   flyctl deploy . --app <your-app> --dockerfile docker/Dockerfile
 #
 # The image is universal: no per-consumer customization. Secrets are injected
-# at runtime via `fly secrets set`. See docker/remote/README.md for the full
+# at runtime via `fly secrets set`. See docker/README.md for the full
 # setup including GitHub identity and SSH signing.
 
-app = 'devbox-remote'
+app = 'devbox'
 primary_region = 'lax'
 
 [build]
-  dockerfile = 'docker/remote/Dockerfile'
+  dockerfile = 'docker/Dockerfile'
 
 [[mounts]]
   source = 'devbox_data'

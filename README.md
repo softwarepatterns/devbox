@@ -30,17 +30,17 @@ mirror of the host.
 
 ### Docker
 
-Two variants, both built from the same scripts:
-
-- **local** — direct-access container, no sshd. `docker exec` in.
-  See [docker/local/README.md](docker/local/README.md).
-- **remote** — SSH-accessible compute target with sshd on :2222, key-only
-  auth. For Fly.io machines, cloud VMs, or rented servers.
-  See [docker/remote/README.md](docker/remote/README.md).
+One image, two modes — local (docker exec) and remote (sshd). See
+[docker/README.md](docker/README.md) for the full guide.
 
 ```bash
-docker build -f docker/local/Dockerfile -t devbox-local .
-docker build -f docker/remote/Dockerfile -t devbox-remote .
+docker build -f docker/Dockerfile -t devbox .
+
+# local
+docker run -d --name devbox --user "$(id -u):$(id -g)" -v devbox-data:/data devbox
+
+# remote (sshd)
+docker run -d --name devbox -e DEVBOX_SSH=true -v devbox-data:/data devbox
 ```
 
 ### Bare metal or VM (Debian/Ubuntu)
@@ -86,8 +86,10 @@ ordering. Add the OS to `test/run.sh`.
 devbox/
 ├── scripts/debian/   install scripts (the product)
 ├── docker/
-│   ├── local/        sealed container, docker exec access
-│   └── remote/       sealed container, sshd on :2222
+│   ├── Dockerfile    sealed container (local + remote modes)
+│   ├── entrypoint.sh init, git config, signing, optional sshd
+│   ├── fly.toml      reference Fly.io deployment
+│   └── README.md     Docker usage guide
 ├── test/             run.sh + verify.sh
 ├── .sops.yaml        SOPS age recipients
 └── .env.enc          SOPS-encrypted secrets (committed)
