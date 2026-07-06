@@ -21,8 +21,10 @@ picks the right OS; the script does the rest.
 before installing it. Run once on a fresh machine or twenty times on an
 existing one — the result is the same.
 
-**No agent frameworks.** devbox installs tools only. The machine is a
-compute target, not an agent runtime.
+**Sealed containers.** The container owns its state under `/data` (named
+volume): caches, repos, and its own generated SSH identity. Host mounts are
+allowed but unsupported — the container is a self-contained Linux box, not a
+mirror of the host.
 
 ## Usage
 
@@ -65,8 +67,7 @@ curl -fsSL "$base/40-cicd.sh" | sudo bash   # ...etc
 
 ### Add a tool
 
-Edit the appropriate script in `scripts/debian/` (e.g. add a package to
-`00-base.sh` or create a new `50-rust.sh`), add it to `test/verify.sh`,
+Edit the appropriate script in `scripts/debian/`, add it to `test/verify.sh`,
 then run the suite:
 
 ```bash
@@ -76,8 +77,8 @@ then run the suite:
 
 ### Add a new OS
 
-Create `scripts/<os>/` ported to the native package manager (brew for macOS,
-pacman for Arch). Keep the numeric ordering. Add the OS to `test/run.sh`.
+Create `scripts/<os>/` ported to the native package manager. Keep the numeric
+ordering. Add the OS to `test/run.sh`.
 
 ### Structure
 
@@ -85,8 +86,8 @@ pacman for Arch). Keep the numeric ordering. Add the OS to `test/run.sh`.
 devbox/
 ├── scripts/debian/   install scripts (the product)
 ├── docker/
-│   ├── local/        no sshd, direct access — /home/devbox as HOME
-│   └── remote/       sshd on :2222, key auth — root
+│   ├── local/        sealed container, docker exec access
+│   └── remote/       sealed container, sshd on :2222
 ├── test/             run.sh + verify.sh
 ├── .sops.yaml        SOPS age recipients
 └── .env.enc          SOPS-encrypted secrets (committed)
@@ -95,34 +96,15 @@ devbox/
 ### Conventions
 
 - **Numbering:** `00-base.sh` → `90-*.sh`, lowest runs first.
-- **Root required:** run via sudo or as root in Docker.
 - **No OS detection:** scripts are OS-specific by directory.
+- **`/data`:** sealed container territory (named volume). Caches, repos, SSH
+  identity. Host mounts to `/data` are the user's responsibility.
+- **`/data/repos`:** convention for container-native repository clones.
 
 ### Secrets
 
 SOPS-encrypted with age and committed as `.env.enc`. The repo is public; the
 secrets are not. CI decrypts via `SOPS_AGE_KEY`.
-
-### GitHub identity (optional)
-
-A devbox that pushes to GitHub as an agent needs two things the image does not
-ship: a way to decrypt each repo's `.env.enc` (which holds a repo-scoped
-`GITHUB_TOKEN`), and a key to sign commits. Both are per-box secrets, generated
-once, injected at runtime. The box is treated as a named engineer — its own
-identity, attributable commits, revocable access.
-
-This is additive and never required to start: build the image and you have a
-working toolchain with no secrets, no signing, no GitHub involvement. Climb the
-ladder only when your use case demands it:
-
-- nothing — local exec, no GitHub.
-- SOPS/age — the box can decrypt a repo's `GITHUB_TOKEN` and authenticate via
-  `scripts/github-login.sh`.
-- + SSH signing — the box's commits are signed and show Verified on GitHub.
-
-devbox provides the tooling (sops, age, git with SSH signing, openssh); the
-deployer provides the keys. The local and remote variants take different paths
-to the same end, by design — see the individual READMEs.
 
 ### CI
 

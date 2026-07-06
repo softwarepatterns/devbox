@@ -1,62 +1,60 @@
 # devbox-local
 
-A Docker container with a full development toolchain. Start it, exec in, work.
+A sealed compute container with a full development toolchain.
 
-## Features
+## Design
 
-Pre-installed: git, bun, node, uv, sops, age, gh, flyctl, ripgrep, jq, vim,
-tmux, htop, python3, ssh, build-essential.
+The container owns its state under `/data` (expected as a named volume):
+- `/data/.ssh` — the box's own SSH keypair and allowed_signers (generated on
+  first boot, persists across restarts)
+- `/data/repos` — container-native repository clones
+- `/data/{bun,uv,npm,pip}` — tool caches
 
-All tool caches are under `/data` for simple persistence. Clean lifecycle
-with tini as PID 1 — `docker stop` works instantly.
+Host directories can be bind-mounted at `/workspace` for file sharing, but
+devbox makes no assumptions about their contents. Everything the container
+needs to function lives under `/data`.
 
-Designed for `--user <uid>:<gid>` at launch (e.g. Hermes's
-`docker_run_as_host_user: true`). The entrypoint creates a passwd entry for
-the running uid at runtime, so tools like ssh-keygen work without a fixed
-in-image user. HOME is `/home/devbox` (world-writable, like `/tmp`).
+The container generates its own SSH identity on first boot. Register the
+public key with GitHub (Settings → SSH and GPG keys → Signing keys) to
+enable signed commits. The key persists with the named volume.
 
 ## Usage
-
-### Run with a shell
 
 ```bash
 docker build -f docker/local/Dockerfile -t devbox-local .
 
-docker run -d --name devbox --user "$(id -u):$(id -g)" devbox-local
-docker exec -it devbox bash
-docker stop devbox
-```
-
-### Persist all caches
-
-```bash
-docker run -d --name devbox --user "$(id -u):$(id -g)" -v devbox-data:/data devbox-local
-```
-
-### Bind individual caches to your host
-
-```bash
-docker run -d --name devbox --user "$(id -u):$(id -g)" \
-  -v ~/.bun/install/cache:/data/bun \
-  -v ~/.cache/uv:/data/uv \
+docker run -d --name devbox \
+  --user "$(id -u):$(id -g)" \
+  -v devbox-data:/data \
+  -e GIT_USER_NAME="Dane Stuckel" \
+  -e GIT_USER_EMAIL="dane.stuckel@gmail.com" \
   devbox-local
+
+docker exec -it devbox bash
 ```
 
-### Mount your project
-
-```bash
-docker run -d --name devbox --user "$(id -u):$(id -g)" -v $(pwd):/workspace devbox-local
-docker exec -it -w /workspace devbox bash
-```
+On first boot, the container logs the generated public key. Register it with
+GitHub to enable commit signing.
 
 ### Cache locations
 
-| Container path | Tool | Host default             |
-|----------------|------|--------------------------|
-| /data/bun      | bun  | ~/.bun/install/cache     |
-| /data/uv       | uv   | ~/.cache/uv              |
-| /data/npm      | npm  | ~/.npm                   |
-| /data/pip      | pip  | ~/.cache/pip             |
+| Container path  | Tool | Host default             |
+|-----------------|------|--------------------------|
+| /data/bun       | bun  | ~/.bun/install/cache     |
+| /data/uv        | uv   | ~/.cache/uv              |
+| /data/npm       | npm  | ~/.npm                   |
+| /data/pip       | pip  | ~/.cache/pip             |
+
+### Cloning repos
+
+Repos should be cloned into `/data/repos` — the container-native working
+tree. Dependencies installed there match the container's platform.
+
+```bash
+docker exec -it devbox bash
+cd /data/repos
+git clone git@github.com:yourorg/yourrepo.git
+```
 
 ## Install
 
@@ -68,17 +66,8 @@ Requires Docker (Docker Desktop, Colima, OrbStack, or dockerd).
 
 ## Development
 
-The local Dockerfile runs the same install scripts as all other devbox
-variants. Tooling logic lives in `scripts/debian/`, not the Dockerfile.
-Adding a tool means editing a script, not the Dockerfile.
-
-Iterate:
-
-```bash
-docker build -f docker/local/Dockerfile -t devbox-local . && \
-docker run -d --name devbox --user "$(id -u):$(id -g)" devbox-local && \
-docker exec -it devbox bash
-```
+The Dockerfile runs the same install scripts as all other devbox variants.
+Tooling logic lives in `scripts/debian/`, not the Dockerfile.
 
 Test:
 
@@ -86,28 +75,26 @@ Test:
 ./test/run.sh debian:bookworm-slim
 ```
 
-## GitHub identity (optional)
+## GitHub identity
 
-The local container acts as you — it reuses your existing SSH identity, your
-age key, and your git identity. Mount your `~/.ssh` directory read-only into
-`/home/devbox/.ssh`. This gives the box your signing keypair and your
-`allowed_signers` file (so `git log` verifies signatures locally without
-the confusing "allowedSignersFile needs to be configured" error).
+The container's SSH keypair is generated on first boot and stored under
+`/data/.ssh`. To enable signed commits:
 
-Mount targets use `/home/devbox/` (the container HOME):
+1. Check the first-boot logs for the public key (or `cat /data/.ssh/id_ed25519.pub`)
+2. Add it to GitHub under Settings → SSH and GPG keys → Signing keys
+3. Commits are automatically signed via SSH (`commit.gpgsign=true`)
+
+Alternatively, provide a pre-generated key via `GIT_SIGNING_KEY`:
 
 ```bash
-docker run -d --name devbox --user "$(id -u):$(id -g)" \
-  -v ~/.ssh:/home/devbox/.ssh:ro \
-  -v ~/.config/sops/age:/home/devbox/.config/sops/age:ro \
+docker run -d --name devbox \
+  --user "$(id -u):$(id -g)" \
+  -v devbox-data:/data \
   -e GIT_USER_NAME="Dane Stuckel" \
   -e GIT_USER_EMAIL="dane.stuckel@gmail.com" \
+  -e GIT_SIGNING_KEY="$(cat ~/.ssh/devbox-signing-key)" \
   devbox-local
 ```
 
-SOPS finds the age key via its default path or the `SOPS_AGE_KEY` env var.
-
-The entrypoint detects the signing public key, configures SSH signing, and
-points git at the `allowed_signers` file — all automatically. In any repo
-with a `.env.enc`, `./scripts/github-login.sh` authenticates `gh` using the
-decrypted, repo-scoped `GITHUB_TOKEN`.
+In any repo with a `.env.enc`, `./scripts/github-login.sh` authenticates `gh`
+using the decrypted, repo-scoped `GITHUB_TOKEN`.

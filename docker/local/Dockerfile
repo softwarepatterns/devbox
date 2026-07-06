@@ -1,16 +1,14 @@
-# devbox local — local container for direct-access compute.
+# devbox local — sealed compute container.
 #
-# No sshd, no network hardening. Access via docker exec.
+# The container owns its state under /data (named volume). Host mounts are
+# allowed but unsupported — /data is the container's trusted territory.
 #
-# Designed to run with docker_run_as_host_user: true — Hermes passes
-# --user <host-uid>:<host-gid> to docker run, so every process (including
-# docker exec sessions) runs as the host user. No gosu, no uid remap, no
-# ownership friction: the running uid matches the mounted files.
+# Designed for docker_run_as_host_user: true (Hermes passes --user uid:gid).
 
 FROM debian:bookworm-slim AS base
 
 LABEL org.opencontainers.image.title="devbox-local"
-LABEL org.opencontainers.image.description="Local dev container with full toolchain"
+LABEL org.opencontainers.image.description="Sealed compute container with full toolchain"
 LABEL org.opencontainers.image.source="https://github.com/softwarepatterns/devbox"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="Software Patterns LLC"
@@ -20,36 +18,29 @@ RUN apt-get update -qq && apt-get install -y -qq tini && rm -rf /var/lib/apt/lis
 
 # --- Home + passwd for dynamic uid --------------------------------------------
 # The container runs as the host user's uid (via docker_run_as_host_user), which
-# has no passwd entry. We need two things:
+# has no passwd entry. We need:
 #   1. /home/devbox as HOME (writable by any uid, like /tmp)
 #   2. /etc/passwd and /etc/group writable so the entrypoint can add a passwd
 #      entry for the running uid (ssh-keygen requires it for signing)
-# This is the same pattern VS Code Dev Containers and GitHub Codespaces use.
 RUN mkdir -p /home/devbox && chmod 1777 /home/devbox
 ENV HOME=/home/devbox
 ENV TMPDIR=/tmp
 
-# --- Cache configuration ------------------------------------------------------
-# All tool caches live under /data so they persist with a single named volume:
-#   docker run -v devbox-data:/data devbox-local
-# Or bind individual caches to host directories:
-#   docker run -v ~/.bun/install/cache:/data/bun devbox-local
+# --- /data structure -----------------------------------------------------------
+# /data is the container's sealed territory. Expected as a named volume.
+# The entrypoint creates the full structure at runtime (after volume mount):
+#   /data/.ssh        generated SSH keypair + allowed_signers (sealed identity)
+#   /data/repos       container's own repository clones
+#   /data/bun         BUN_INSTALL_CACHE_DIR
+#   /data/uv          UV_CACHE_DIR
+#   /data/npm         npm_config_cache
+#   /data/pip         PIP_CACHE_DIR
 ENV BUN_INSTALL_CACHE_DIR=/data/bun
 ENV UV_CACHE_DIR=/data/uv
 ENV npm_config_cache=/data/npm
 ENV PIP_CACHE_DIR=/data/pip
 
-# Create the default cache structure. World-writable (sticky bit) because the
-# runtime uid is dynamic (set by docker_run_as_host_user). Named volumes seed
-# from this layer; the entrypoint recreates + re-chmods at runtime.
-
-RUN mkdir -p /data/bun /data/uv /data/npm /data/pip \
-    && chmod 1777 /data/bun /data/uv /data/npm /data/pip
-
 # --- Install all devbox tooling -----------------------------------------------
-# Scripts run as root at build time. Tools install to system paths
-# (/usr/local/bin, etc.) which are world-executable, so the host user
-# can use them without elevation.
 COPY scripts/debian/ /tmp/devbox-scripts/
 RUN bash /tmp/devbox-scripts/00-base.sh \
     && bash /tmp/devbox-scripts/10-ts.sh \
@@ -59,6 +50,9 @@ RUN bash /tmp/devbox-scripts/00-base.sh \
     && rm -rf /tmp/devbox-scripts
 
 # --- Entrypoint ---------------------------------------------------------------
+# /etc/passwd and /etc/group writable so the non-root entrypoint can add a
+# passwd entry for the running uid. Must come AFTER apt installs (they reset
+# these files to 644).
 RUN chmod 666 /etc/passwd /etc/group
 COPY docker/entrypoint.sh /usr/local/bin/devbox-entrypoint.sh
 RUN chmod 755 /usr/local/bin/devbox-entrypoint.sh
